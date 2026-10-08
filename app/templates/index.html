@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>API Atlas</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        input,
+        textarea,
+        button {
+            padding: 8px;
+            margin: 5px 0;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            height: 250px;
+            font-family: monospace;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .api {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            overflow: auto;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>API Atlas</h1>
+
+<p>Simple API documentation catalog.</p>
+
+<div class="section">
+    <h2>Search APIs</h2>
+
+    <input
+        id="search"
+        placeholder="Search by API name or description..."
+    >
+
+    <button onclick="searchApis()">Search</button>
+
+    <div id="results"></div>
+</div>
+
+<div class="section">
+    <h2>Add API</h2>
+
+    <form onsubmit="createApi(event)">
+
+        <label>Name</label>
+        <input id="name" required>
+
+        <label>Description</label>
+        <input id="description">
+
+        <label>Version</label>
+        <input id="version" value="1.0.0" required>
+
+        <label>OpenAPI Specification (JSON)</label>
+
+        <textarea id="specification" required>{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Example API",
+    "version": "1.0.0"
+  },
+  "paths": {}
+}</textarea>
+
+        <button type="submit">
+            Add API
+        </button>
+
+    </form>
+</div>
+
+<script>
+
+async function searchApis() {
+    const search = document.getElementById("search").value;
+
+    const response = await fetch(
+        `/api/apis?search=${encodeURIComponent(search)}`
+    );
+
+    const apis = await response.json();
+
+    const results = document.getElementById("results");
+
+    results.innerHTML = "";
+
+    if (apis.length === 0) {
+        results.innerHTML = "<p>No APIs found.</p>";
+        return;
+    }
+
+    apis.forEach(api => {
+        const element = document.createElement("div");
+
+        element.className = "api";
+
+        element.innerHTML = `
+            <h3>${escapeHtml(api.name)}</h3>
+            <p>${escapeHtml(api.description || "")}</p>
+            <p><strong>Version:</strong> ${escapeHtml(api.version)}</p>
+
+            <button onclick="showSpecification('${api.id}')">
+                Show OpenAPI
+            </button>
+
+            <button onclick="deleteApi('${api.id}')">
+                Delete
+            </button>
+
+            <pre id="spec-${api.id}" style="display:none"></pre>
+        `;
+
+        results.appendChild(element);
+    });
+}
+
+
+async function showSpecification(id) {
+    const response = await fetch(`/api/apis/${id}`);
+
+    const api = await response.json();
+
+    const element = document.getElementById(`spec-${id}`);
+
+    element.style.display = "block";
+
+    element.textContent = JSON.stringify(
+        api.specification,
+        null,
+        2
+    );
+}
+
+
+async function createApi(event) {
+    event.preventDefault();
+
+    const specificationText =
+        document.getElementById("specification").value;
+
+    let specification;
+
+    try {
+        specification = JSON.parse(specificationText);
+    } catch (error) {
+        alert("The OpenAPI specification is not valid JSON.");
+        return;
+    }
+
+    const data = {
+        name: document.getElementById("name").value,
+        description: document.getElementById("description").value,
+        version: document.getElementById("version").value,
+        specification: specification
+    };
+
+    const response = await fetch("/api/apis", {
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+        alert("Could not create API.");
+        return;
+    }
+
+    document.getElementById("name").value = "";
+    document.getElementById("description").value = "";
+
+    alert("API created!");
+
+    searchApis();
+}
+
+
+async function deleteApi(id) {
+    if (!confirm("Delete this API?")) {
+        return;
+    }
+
+    await fetch(`/api/apis/${id}`, {
+        method: "DELETE"
+    });
+
+    searchApis();
+}
+
+
+function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value;
+    return div.innerHTML;
+}
+
+
+searchApis();
+
+</script>
+
+</body>
+</html>
